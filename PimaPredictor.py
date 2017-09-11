@@ -1,43 +1,58 @@
 import pandas as pd
-from helperFunctions import *
-import tensorflow as tf
 
-learning_rate = .001
+import tensorflow as tf
+from helperFunctions import *
+
+input_features = 8
+n_hidden_units1 = 10
+n_hidden_units2 = 14
+n_hidden_units3 = 12
+n_hidden_units4 = 1
+
+rate = .001
+
+weights = dict(
+            w1=tf.Variable(tf.random_normal([input_features, n_hidden_units1])),
+            w2=tf.Variable(tf.random_normal([n_hidden_units1, n_hidden_units2])),
+            w3=tf.Variable(tf.random_normal([n_hidden_units2, n_hidden_units3])),
+            w4=tf.Variable(tf.random_normal([n_hidden_units3, n_hidden_units4]))
+            )
+
+biases = dict(
+            b1=tf.Variable(tf.zeros([n_hidden_units1])),
+            b2=tf.Variable(tf.zeros([n_hidden_units2])),
+            b3=tf.Variable(tf.zeros([n_hidden_units3])),
+            b4=tf.Variable(tf.zeros([n_hidden_units4]))
+            )
 
 train_features, train_labels = format_data("/Users/yazen/Desktop/datasets/PimaDiabetes/train.csv")
 test_features, test_labels = format_data("/Users/yazen/Desktop/datasets/PimaDiabetes/test.csv")
 
-x = tf.placeholder("float64", [None, 8])
-y = tf.placeholder("float64", [None, 1])
+x = tf.placeholder("float32", [None, 8])
+y = tf.placeholder("float32", [None, 1])
 
-layer = create_network(x, [8, 100, 1000, 500, 1],
-                       [tf.nn.relu, tf.nn.tanh, tf.nn.relu, tf.nn.sigmoid])
+layer = create_layer(x, weights['w1'], biases['b1'], tf.nn.relu)
+layer = create_layer(layer, weights['w2'], biases['b2'], tf.nn.tanh)
+layer = create_layer(layer, weights['w3'], biases['b3'], tf.nn.relu)
+Z4 = create_layer(layer, weights['w4'], biases['b4'],tf.nn.sigmoid)
 
-
-cost = tf.reduce_mean(tf.losses.sigmoid_cross_entropy(logits=layer, multi_class_labels=y))
-
-optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost)
+cost = cost_compute(Z4, y)
+optimizer = tf.train.AdamOptimizer(learning_rate=rate).minimize(cost)
 
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    for iterator in range(0, 500):
+    for iteration in range(1, 1000):
         _, c = sess.run([optimizer, cost], feed_dict={x: train_features, y: train_labels})
-        print("Iteration " + str(iterator) + " cost: " + str(c))
+        print("Iteration " + str(iteration) + " cost: " + str(c))
 
-    prediction = tf.round(layer)
-    train_predictions = sess.run(prediction, feed_dict={x:train_features, y:train_labels})
-    test_predictions = sess.run(prediction, feed_dict={x:test_features, y:test_labels})
+    prediction = tf.round(Z4)
+    accuracy = tf.reduce_mean(tf.cast(tf.equal(prediction, y), "float"))
 
-    train_equality_array = tf.equal(prediction, train_labels)
-    test_equality_array = tf.equal(prediction, test_labels)
+    prediction = sess.run(prediction, feed_dict={x: train_features, y: train_labels})
 
-    train_accuracy = sess.run(tf.reduce_mean(tf.cast(train_equality_array, "float")),
-                              feed_dict={x: train_features, y: train_labels})
-    test_accuracy = sess.run(tf.reduce_mean(tf.cast(test_equality_array, "float")),
-                             feed_dict={x: test_features, y: test_labels})
+    print(np.append(prediction, train_labels, 1))
+
+    print(accuracy.eval({x: train_features, y: train_labels}))
+    print(accuracy.eval({x: test_features, y: test_labels}))
 
 
-    comparison = np.append(train_predictions,train_labels, axis=1)
-    print(comparison[:20])
-    print("train accuracy " + str(train_accuracy))
-    print("test accuracy " + str(test_accuracy))
